@@ -61,7 +61,7 @@ This rejection depends on a narrowly scoped adapter for host internals. On an un
 
 The Python package declares Python 3.10 or later as its requirement. Actual compatibility depends on Hermes APIs and internal implementation. The verified host is `v0.21.5+4775.g3ebbaf5`, at source revision `3ebbaf524344f93943169e63854cb952541563f9`. Compatibility with other revisions, including the latest version, has not been verified. Read [Compatibility and limitations (Japanese)](docs/compatibility.md) first.
 
-The repository supports both native directory plugins and Python entry points. In a managed runtime, use Hermes's official plugin management commands. The following is an installation example for use **after the repository has been published**. Set `PUBLIC_COMMIT_SHA` to the 40-character SHA of a reviewed public commit.
+The repository supports both native directory plugins and Python entry points. In a managed runtime, use Hermes's official plugin management commands. The following is an installation example. Set `PUBLIC_COMMIT_SHA` to the 40-character SHA of a reviewed public commit.
 
 ```sh
 PUBLIC_COMMIT_SHA=REPLACE_WITH_REVIEWED_40_CHARACTER_COMMIT_SHA
