@@ -1,0 +1,4 @@
+include __init__.py plugin.yaml
+include docs/compatibility.md docs/development.md
+recursive-include scripts *.py
+recursive-include tests *.py

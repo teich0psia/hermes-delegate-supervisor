@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-delegate-supervisor"
+version = "0.2.0"
+description = "Periodic parent review of existing Hermes delegate_task children"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.entry-points."hermes_agent.plugins"]
+delegate_supervisor = "hermes_delegate_supervisor"
+
+[tool.setuptools]
+packages = ["hermes_delegate_supervisor"]
+
+[tool.setuptools.package-data]
+hermes_delegate_supervisor = ["plugin.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

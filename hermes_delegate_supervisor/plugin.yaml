@@ -1,0 +1,21 @@
+name: delegate_supervisor
+version: 0.2.0
+kind: standalone
+description: Periodic parent review of existing delegate_task children.
+provides_hooks:
+  - subagent_start
+  - subagent_stop
+  - pre_llm_call
+  - post_llm_call
+  - post_tool_call
+  - agent_loop_stopped
+  - on_session_reset
+  - on_session_finalize
+# Commands are runtime registrations on this host; capabilities is descriptive metadata.
+capabilities:
+  commands: [supervision]
+config_schema:
+  interval_seconds:
+    type: number
+    default: 600
+    description: Default supervision interval in seconds (finite and positive).
