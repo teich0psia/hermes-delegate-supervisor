@@ -38,17 +38,25 @@ class Parent:
     queued: str | None = None
     retry_at: float = 0
     override: float | None = None
-    disabled: bool = False
+    default_enabled: bool = True
+    enabled_override: bool | None = None
 
     @property
     def enabled(self):
-        return not self.disabled
+        return self.default_enabled if self.enabled_override is None else self.enabled_override
+
+    @property
+    def has_overrides(self):
+        return self.override is not None or self.enabled_override is not None
 
 
 class Supervisor:
-    def __init__(self, host, interval=600, clock=time.monotonic):
+    def __init__(self, host, interval=600, clock=time.monotonic, *, enabled_by_default=True):
         self.host = host
         self.interval = interval_seconds(interval)
+        if not isinstance(enabled_by_default, bool):
+            raise ValueError("enabled_by_default must be a boolean")
+        self.enabled_by_default = enabled_by_default
         self.clock = clock
         self.children = {}
         self.parents = {}
@@ -63,7 +71,7 @@ class Supervisor:
         """Atomic session policy update; no timer teardown or global config writes."""
         arg = raw_args.strip().lower()
         value = None
-        if arg not in {"", "status", "off", "default"}:
+        if arg not in {"", "status", "on", "off", "default"}:
             match = re.fullmatch(r"(\d+(?:\.\d+)?)([smh])", arg)
             try:
                 if match is None:
@@ -72,7 +80,7 @@ class Supervisor:
                 if value < 1 or not math.isfinite(self.clock() + value):
                     raise ValueError()
             except (ValueError, OverflowError):
-                return "Usage: /supervision [<duration: 10m, 30s, 1h> | off | default] (minimum 1s). No change."
+                return "Usage: /supervision [<duration: 10m, 30s, 1h> | on | off | default] (minimum 1s). No change."
         if route is None:
             return "Supervision unavailable: no supported current conversation. Send a normal message first if this gateway has no session yet."
         with self._cv:
@@ -85,8 +93,8 @@ class Supervisor:
                     and self.host.continues(route.session, parent.route.session)):
                 parent = self._parent(route)
             if arg and arg != "status":
-                parent.disabled = arg == "off"
-                if arg != "off":
+                parent.enabled_override = None if arg == "default" else arg != "off"
+                if arg not in {"on", "off"}:
                     parent.override = value
                 now = self.clock()
                 for child in self.children.values():
@@ -102,7 +110,9 @@ class Supervisor:
             targets = sorted(c.ident for c in self.children.values() if c.parent == parent.route.key)
             return (f"Supervision: {'enabled' if parent.enabled else 'disabled'}; "
                     f"interval: {self.effective_interval(parent):g}s; "
-                    f"source: {'default' if parent.override is None and parent.enabled else 'override'}; "
+                    f"source: {'override' if parent.has_overrides else 'default'}; "
+                    f"enabled source: {'default' if parent.enabled_override is None else 'override'}; "
+                    f"interval source: {'default' if parent.override is None else 'override'}; "
                     f"targets: {', '.join(targets) or 'none'}; "
                     f"parent: {'busy' if parent.busy else 'idle'}; "
                     f"pending: {len(parent.pending)}; accepted wake: {'yes' if parent.queued else 'no'}.")
@@ -142,7 +152,7 @@ class Supervisor:
         if parent is not None:
             # /resume or reset is NOT compression. Never adopt its old children.
             self.stop_parent(route.key)
-        parent = Parent(route)
+        parent = Parent(route, default_enabled=self.enabled_by_default)
         self.parents[route.key] = parent
         return parent
 
@@ -178,7 +188,7 @@ class Supervisor:
             if not any(c.parent == child.parent for c in self.children.values()):
                 if getattr(parent.route, "cli", None) is not None:
                     parent.queued = None  # irrevocably revoke its queued CLI lease
-                if not parent.busy and not parent.queued and parent.override is None and parent.enabled:
+                if not parent.busy and not parent.queued and not parent.has_overrides:
                     self.parents.pop(child.parent, None)
 
     def stop_parent(self, key, *, clear_settings=True):
@@ -187,7 +197,7 @@ class Supervisor:
                 if child.parent == key:
                     self._remove(ident)
             parent = self.parents.get(key)
-            if clear_settings or parent is None or (parent.override is None and parent.enabled):
+            if clear_settings or parent is None or not parent.has_overrides:
                 self.parents.pop(key, None)
             else:
                 parent.busy = False
@@ -251,7 +261,7 @@ class Supervisor:
             if parent:
                 parent.busy = False
                 parent.route = route
-                if parent.override is None and parent.enabled and not parent.queued and not any(c.parent == route.key for c in self.children.values()):
+                if not parent.has_overrides and not parent.queued and not any(c.parent == route.key for c in self.children.values()):
                     self.parents.pop(route.key, None)
             self._cv.notify_all()
 
@@ -276,7 +286,7 @@ class Supervisor:
             if not valid and parent.queued == token:
                 parent.queued = None
                 if (self.parents.get(route.key) is parent and not parent.busy
-                        and parent.override is None and parent.enabled and not any(c.parent == route.key for c in self.children.values())):
+                        and not parent.has_overrides and not any(c.parent == route.key for c in self.children.values())):
                     self.parents.pop(route.key, None)
             return valid
 

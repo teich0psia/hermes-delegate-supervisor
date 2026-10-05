@@ -172,8 +172,10 @@ def test_directory_manifest_load_and_unload(ctx):
     assert mgr.has_hook("subagent_start")
     entry = mgr._plugin_commands["supervision"]
     assert entry["plugin_key"] == "delegate_supervisor" and entry["argument_mode"] == "text"
-    assert entry["args_hint"] == "[<duration> | off | default]"
+    assert entry["args_hint"] == "[<duration> | on | off | default]"
     assert manifest.config_schema["interval_seconds"]["default"] == 600
+    assert manifest.config_schema["enabled_by_default"]["default"] is True
+    assert manifest.config_schema["enabled_by_default"]["type"] == "boolean"
     assert (root / "plugin.yaml").read_bytes() == (root / "hermes_delegate_supervisor/plugin.yaml").read_bytes()
     assert mgr.unload("delegate_supervisor")
     assert not mgr.has_hook("subagent_start")

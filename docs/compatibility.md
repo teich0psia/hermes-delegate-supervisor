@@ -2,7 +2,7 @@
 
 ## 確認した実装
 
-v0.2.0のセッション制御とbusy Gateway拒否は、Hermes Agent `3ebbaf524344f93943169e63854cb952541563f9` を対象にオフライン検証しています。Pythonパッケージのバージョン要件を満たすだけでは、各画面の互換性は確認できません。
+v0.2.0のセッション制御とbusy Gateway拒否、およびv0.3.0の既定オン・オフ設定と `/supervision on` は、Hermes Agent `3ebbaf524344f93943169e63854cb952541563f9` を対象にオフライン検証しています。Pythonパッケージのバージョン要件を満たすだけでは、各画面の互換性は確認できません。
 
 プラグインは `subagent_start`・`subagent_stop`、LLM呼出し前後、停止・reset・finalizeのhookと、`tool_execution` middleware、`register_command` を使用します。委譲のcore関数・schema・既存routing wrapperは置換しません。コマンド登録の正本は実行時の `register_command` です。
 
@@ -27,7 +27,7 @@ v0.2.0のセッション制御とbusy Gateway拒否は、Hermes Agent `3ebbaf524
 
 ## 配送の限界
 
-Gateway・TUIで受付済みの要求を撤回するAPIはありません。子の完了や無効化の後に空の確認要求が届く場合でも、入口では現在の監督対象を再確認します。Classic CLIでは未消費の自プラグインenvelopeを失効させます。すでに開始したモデルターンの取り消しはしません。
+Gateway・TUIで受付済みの要求を撤回するAPIはありません。子の完了や無効化の後に空の確認要求が届く場合でも、入口では現在の監督対象を再確認します。Classic CLIでは未消費の自プラグインenvelopeを失効させます。`default` で既定オフへ戻る場合にも、この無効化の規則を適用します。すでに開始したモデルターンの取り消しはしません。
 
 注入の受付後にホストが認可・送信先を拒否した場合、プラグインへ確定した配送失敗callbackは戻りません。受付トークンが入口へ届くまで追加予約を抑止するため、ホストログで原因を確認する必要があります。予約の成功を実行・返信の成功として報告しません。
 
@@ -38,5 +38,7 @@ unloadでは自分が追加したインスタンス属性だけを復元し、�
 ## オフラインと実運用の区別
 
 既存の受入ではsourceと展開wheelで各99件が成功しています。busy ingress、通常入力保持、権限確認、プロファイル分離、会話上書き、圧縮後の世代確認、停止・unload・予約失効を検証しています。
+
+v0.3.0の受入ではsourceと展開wheelで各130件が成功し、独立レビューに重大な指摘はありませんでした。公開向けの検証範囲は[READMEの検証節（英語）](../README.md#development-and-verification)を参照してください。既定値と会話上書きは別状態であり、明示 `on` は既定trueと同じ実効値でも子の終了・親stop後に保持します。reset・finalizeは上書きを解除し、ロード時の既定値へ戻ります。busy Gatewayの拒否規則とアダプターは変更しません。
 
 実際のホスト処理を使う場合も、constructor・認証解決・transport末端などはfixtureです。実Gatewayの起動全体、実transport reconnect、Discord・CLI・TUI・Desktopでのライブ配送、実LLMの子起動と親の判断、配備後の採用はこの検証に含みません。状態はプロセス内だけにあり、再ロードによる復元を保証しません。

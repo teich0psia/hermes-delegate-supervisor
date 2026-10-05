@@ -148,8 +148,12 @@ def test_cli_real_slash_caller_revokes_off_lease(cli_runtime, monkeypatch):
     assert "default" in outputs[-1]
 
 
-def test_tui_desktop_real_command_dispatch_and_context_binder(ctx, monkeypatch):
+@pytest.mark.parametrize("default", [True, False])
+def test_tui_desktop_real_command_dispatch_and_context_binder(ctx, monkeypatch, default):
     context, mgr = ctx
+    from hermes_constants import get_hermes_home
+    config = get_hermes_home() / "config.yaml"
+    config.write_text(config.read_text() + f"        enabled_by_default: {str(default).lower()}\n")
     s = install(context, monkeypatch)
     session, _ = tui(mgr, key="old", session_id="old")
     monkeypatch.setattr(plugins, "_ensure_plugins_discovered", lambda: mgr)
@@ -172,6 +176,8 @@ def test_tui_desktop_real_command_dispatch_and_context_binder(ctx, monkeypatch):
     s.parents["old"].busy = True
     assert "disabled" in dispatch(2, {}, session, "supervision", "off")["output"]
     assert s.parents["old"].busy and s.children
+    assert "180s" in dispatch(3, {}, session, "supervision", "on")["output"]
+    assert s.parents["old"].enabled and s.parents["old"].busy and s.children
     compression(s.host.home)
     session["agent"].session_id = "compressed"
     assert "override" in dispatch(3, {}, session, "supervision", "")["output"]

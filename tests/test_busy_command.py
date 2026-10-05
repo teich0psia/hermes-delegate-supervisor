@@ -128,19 +128,20 @@ def runtime(ctx, monkeypatch):
 
 @pytest.mark.parametrize("mode", ["queue", "steer", "interrupt"])
 @pytest.mark.parametrize("lane", ["adapter", "direct"])
-def test_busy_reject_no_normal_input_or_state_changes(runtime, mode, lane):
+@pytest.mark.parametrize("arg", ["off", "on", "default"])
+def test_busy_reject_no_normal_input_or_state_changes(runtime, mode, lane, arg):
     s, mgr, g, adapter, cls, seen, event = runtime
     g.mode = mode
     parent = s.parents["room"]; child = s.children["a"]
     before = (parent.enabled, parent.override, parent.busy, set(parent.pending), parent.queued, child.due)
     active = dict(adapter._active_sessions); pending = dict(adapter._pending_messages)
     if lane == "adapter":
-        asyncio.run(adapter._handle_message_while_active(event(), "room"))
+        asyncio.run(adapter._handle_message_while_active(event("/supervision " + arg), "room"))
         replies = [row[1] for row in seen if row[0] == "reply"]
         assert len(replies) == 1 and replies[0]["content"] == BUSY_REPLY
         assert replies[0]["reply_to"] == "anchor" and replies[0]["metadata"]["thread_id"] == "offline-thread"
     else:
-        assert asyncio.run(g._primary_message_handler()(event())) == BUSY_REPLY
+        assert asyncio.run(g._primary_message_handler()(event("/supervision " + arg))) == BUSY_REPLY
     assert [row[0] for row in seen if row[0] != "reply"] == ["auth", "bot", "slash"]
     assert before == (parent.enabled, parent.override, parent.busy, set(parent.pending), parent.queued, child.due)
     assert s.parents["room"] is parent and s.children["a"] is child

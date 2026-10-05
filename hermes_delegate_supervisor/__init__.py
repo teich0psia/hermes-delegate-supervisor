@@ -9,13 +9,14 @@ from .core import Supervisor
 from .host import Host
 
 log = logging.getLogger(__name__)
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def register(ctx):
     try:
         host = Host(ctx)
-        supervisor = Supervisor(host, ctx.get_config("interval_seconds", 600))
+        supervisor = Supervisor(host, ctx.get_config("interval_seconds", 600),
+                                enabled_by_default=ctx.get_config("enabled_by_default", True))
     except Exception:
         log.warning("delegate_supervisor INACTIVE: unsupported host or invalid config", exc_info=True)
         return
@@ -115,11 +116,12 @@ def register(ctx):
     ctx.register_middleware("tool_execution", execution)
     command = ctx.register_command("supervision", supervision,
         description="Show or change this conversation's automatic child supervision",
-        args_hint="[<duration> | off | default]", argument_mode="text")
+        args_hint="[<duration> | on | off | default]", argument_mode="text")
     if command is None:
         log.warning("delegate_supervisor: /supervision registration declined; timers unchanged")
     else:
         from .busy import install_busy_rejection
         install_busy_rejection(host, supervision)
     supervisor.start()
-    log.info("delegate_supervisor ACTIVE: interval_seconds=%s", supervisor.interval)
+    log.info("delegate_supervisor ACTIVE: interval_seconds=%s enabled_by_default=%s",
+             supervisor.interval, supervisor.enabled_by_default)

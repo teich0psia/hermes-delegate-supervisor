@@ -1,5 +1,5 @@
 name: delegate_supervisor
-version: 0.2.0
+version: 0.3.0
 kind: standalone
 description: Periodic parent review of existing delegate_task children.
 provides_hooks:
@@ -15,6 +15,10 @@ provides_hooks:
 capabilities:
   commands: [supervision]
 config_schema:
+  enabled_by_default:
+    type: boolean
+    default: true
+    description: Enable automatic supervision in new conversations (boolean only).
   interval_seconds:
     type: number
     default: 600

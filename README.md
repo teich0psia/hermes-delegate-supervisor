@@ -6,7 +6,7 @@ A plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent) that l
 
 A timer tracks review deadlines and passes the targets to the parent. The parent can inspect progress and evidence as needed, then send further instructions through the existing `delegate_task(action="steer", ...)`. This plugin does not launch a separate supervision model. The timer and liveness checks do not call a model, but the parent's review turns incur normal inference costs.
 
-This README describes the **v0.2.0 source**. v0.1.0 does not have `/supervision`. v0.2.0 is an offline-verified candidate, not a release whose delivery and parent decision-making have been verified in live Gateway, Discord, CLI, TUI, or Desktop operation.
+This README describes the **v0.3.0 source**, accepted after independent review and offline verification. v0.1.0 does not have `/supervision`; v0.2.0 does not have `enabled_by_default` or `/supervision on`. Delivery and parent decision-making have not been verified with real models or live Gateway, Discord, CLI, TUI, or Desktop operation.
 
 ## What it supervises—and what it does not
 
@@ -26,10 +26,11 @@ The command displays or changes settings for the current conversation without ca
 
 | Input | Effect |
 |---|---|
-| `/supervision` or `/supervision status` | Shows enabled/disabled state, effective interval, default/override status, target IDs, parent busy/idle state, pending count, and whether a review request has been accepted |
+| `/supervision` or `/supervision status` | Shows enabled/disabled state, effective interval, each setting's default/override source, target IDs, parent busy/idle state, pending count, and whether a review request has been accepted |
+| `/supervision on` | Enables automatic reviews for this conversation; preserves any interval override, otherwise uses the default interval read at load time |
 | `/supervision 10m` | Overrides the interval for this conversation and enables automatic reviews |
 | `/supervision off` | Disables automatic reviews only; retains the previous interval and registered children |
-| `/supervision default` | Clears the interval and disabled-state overrides, then enables reviews using the default interval read at load time |
+| `/supervision default` | Clears both enabled-state and interval overrides and restores the settings read at load time; if the default is off, reviews become disabled |
 
 Intervals are integers or decimals followed by `s`, `m`, or `h`. Examples include `30s`, `1.5m`, and `1h`; the minimum is 1 second. Values without a unit and `1d` are not accepted. Shorter intervals increase the number of parent review turns and their inference costs.
 
@@ -37,9 +38,9 @@ You can configure supervision before launching a child. If the conversation does
 
 ### Changing the interval versus disabling reviews
 
-Changing the interval or using `default` preserves registered children, the parent's state, pending reviews, and accepted requests. Each child's next deadline is recalculated from the time the command is accepted, using the new interval. Reviews that are already pending or accepted may arrive before that new deadline. No plugin reload is needed for these changes.
+Changing the interval or using `on` or `default` preserves registered children and the parent's state. Changes that enable reviews also preserve pending reviews and accepted requests. Each child's next deadline is recalculated from the time the command is accepted, using the effective interval. Reviews that are already pending or accepted may arrive before that new deadline. No plugin reload is needed for these changes.
 
-`off` does not stop children. It clears pending reviews and prevents review targets from being supplied at the start of a turn. Children launched while supervision is disabled are still registered. Re-enabling supervision sets the next deadlines from the current time.
+`off` does not stop children. It preserves the interval and registered children, clears pending reviews, and prevents review targets from being supplied at the start of a turn. A default-off conversation, including after `default` restores that policy, also supplies no review targets. Children launched while supervision is disabled are still registered, so `on` can begin supervising children already running in that conversation. Re-enabling supervision sets the next deadlines from the current time.
 
 In Classic CLI, unconsumed review requests are invalidated. Gateway, TUI, and Desktop have no API for retracting accepted input, so one accepted request may still arrive after supervision is disabled. That request alone does not prompt further instructions to children. However, a parent turn that has already started with review targets is not canceled.
 
@@ -81,7 +82,15 @@ hermes plugins enable delegate_supervisor --no-allow-tool-override
 
 Permission to override built-in tools is not required. The narrowly scoped Classic CLI FIFO route does not use Gateway injection permission. The configured interval must be a finite positive number; strings, booleans, 0, negative numbers, NaN, and infinity cause the plugin to become inactive.
 
-Depending on the host, `enable` requests a plugin reload in the running Gateway. This is distinct from a service restart, but the plugin's supervision registrations and conversation overrides are lost. If conversations are active, check the effects of a reload before enabling the plugin. The default interval in the configuration file is read at load time; use `/supervision` within the conversation to change the interval while it is running.
+To use automatic reviews only in conversations that opt in, keep the native plugin enabled and configure:
+
+```sh
+hermes config set plugins.entries.delegate_supervisor.settings.enabled_by_default false
+```
+
+`enabled_by_default` controls the default automatic-review policy for new conversations, **not native plugin enablement**. When omitted, it is `true` for backward compatibility: v0.3.0 is not inherently default-off. With `false`, child registration and `/supervision` remain available, but no automatic wake or supervision-target context is generated until that conversation uses `on` or a duration. Only booleans are accepted; strings such as `"false"`, numbers, and null cause the plugin to become inactive with a warning. Default-off prevents automatic review inference, but does not stop the plugin's timer or liveness checks.
+
+Depending on the host, `enable` requests a plugin reload in the running Gateway. This is distinct from a service restart, but the plugin's supervision registrations and conversation overrides are lost. If conversations are active, check the effects of a reload before enabling the plugin. Both default enabled state and default interval in the configuration file are read at load time; use `/supervision` within a running conversation for immediate changes. After loading with `enabled_by_default: false`, use `/supervision on` in a new conversation to opt in.
 
 ## Review request delivery and conversation lifecycle
 
@@ -94,7 +103,9 @@ Depending on the host, `enable` requests a plugin reload in the running Gateway.
 
 ## Development and verification
 
-Existing offline acceptance records show 99 passing tests each for the source and the unpacked wheel. These checks connect actual host logic to fixtures; they do not establish successful child launches with a real LLM, authentication, Discord delivery, or live startup of each interface. Publication-preparation checks were limited to documentation, packaging, and modified development scripts; the unchanged functional test suite was not rerun.
+The accepted v0.3.0 offline verification recorded **130 passing tests for the source** and **130 for the unpacked wheel**; independent review found no material issue. This covers default-policy validation, `on/off/default`, preserved child registrations while disabled, conversation lifecycle and isolation, and the existing delivery and busy-path regressions. The older v0.2.0 acceptance recorded 99 passing tests each and is separate evidence. These checks connect actual host logic to fixtures; they do not establish successful child launches with a real LLM, authentication, Discord delivery, or live startup of each interface.
+
+Public-release preparation reuses that accepted functional evidence and keeps runtime modules byte-identical to the accepted implementation. Its checks are limited to export consistency, distribution packaging, documentation links, whitespace, privacy, and the host's offline Doctor API; the full functional suite is not rerun. Raw operational and independent-review records remain outside the public tree.
 
 See [Development instructions (Japanese)](docs/development.md) for verification procedures that do not alter the environment and for the required external checkouts. An `ACTIVE` log at registration time or a successful Doctor check alone does not establish that a long-running Gateway has adopted that version, or that periodic reviews are actually being delivered.
 

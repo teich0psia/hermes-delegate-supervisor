@@ -24,13 +24,13 @@ print('wheel:', build_wheel({str(root / 'dist')!r}))
 print('sdist:', build_sdist({str(root / 'dist')!r}))
 """
     subprocess.run([str(host / "venv/bin/python"), "-c", code], cwd=root, env=env, check=True)
-    wheel = root / "dist/hermes_delegate_supervisor-0.2.0-py3-none-any.whl"
+    wheel = root / "dist/hermes_delegate_supervisor-0.3.0-py3-none-any.whl"
     artifact = Path(temp) / "artifact"
     probe = f"""import sys, zipfile, importlib.metadata as metadata, hashlib, tarfile
 from pathlib import Path
-with tarfile.open({str(root / 'dist/hermes_delegate_supervisor-0.2.0.tar.gz')!r}) as archive:
-    for name in ('README.md', 'tests/host_fixtures.py', 'tests/test_regressions.py', 'tests/test_cli_delivery.py', 'tests/test_supervision_command.py', 'tests/test_busy_command.py', 'scripts/verify_offline.py', 'hermes_delegate_supervisor/adapters.py', 'hermes_delegate_supervisor/busy.py'):
-        assert archive.extractfile('hermes_delegate_supervisor-0.2.0/' + name).read() == (Path({str(root)!r}) / name).read_bytes()
+with tarfile.open({str(root / 'dist/hermes_delegate_supervisor-0.3.0.tar.gz')!r}) as archive:
+    for name in ('README.md', 'tests/host_fixtures.py', 'tests/test_regressions.py', 'tests/test_cli_delivery.py', 'tests/test_supervision_command.py', 'tests/test_default_policy.py', 'tests/test_busy_command.py', 'scripts/verify_offline.py', 'hermes_delegate_supervisor/adapters.py', 'hermes_delegate_supervisor/busy.py'):
+        assert archive.extractfile('hermes_delegate_supervisor-0.3.0/' + name).read() == (Path({str(root)!r}) / name).read_bytes()
 zipfile.ZipFile({str(wheel)!r}).extractall({str(artifact)!r})
 for name in ('__init__.py', 'core.py', 'host.py', 'adapters.py', 'busy.py', 'plugin.yaml'):
     relative = Path('hermes_delegate_supervisor') / name
@@ -41,7 +41,7 @@ assert plugin.__file__.startswith({str(artifact)!r})
 dist = metadata.distribution('hermes-delegate-supervisor')
 ep = next(e for e in dist.entry_points if e.group == 'hermes_agent.plugins')
 assert ep.name == 'delegate_supervisor' and callable(ep.load().register)
-assert plugin.__version__ == '0.2.0'
+assert plugin.__version__ == '0.3.0'
 print('artifact import:', plugin.__file__)
 print('entry point:', ep)
 print('artifact verified: wheel import and metadata; no installation')

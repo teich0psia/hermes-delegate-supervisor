@@ -15,10 +15,12 @@ HERMES_SOURCE=/path/to/audited/hermes-agent
 export TMPDIR="$HOME/.hermes/cache/scratch"
 mkdir -p "$TMPDIR"
 python scripts/verify_offline.py "$HERMES_SOURCE" "$PWD" \
-  tests/test_core.py tests/test_supervision_command.py tests/test_busy_command.py
+  tests/test_core.py tests/test_default_policy.py tests/test_supervision_command.py tests/test_busy_command.py
 ```
 
 runnerはcredential-freeな子プロセス、scratchの `HOME`・`HERMES_HOME`、空の有効プラグイン設定を使います。pytestの自動プラグイン読込とlazy installを無効にし、bootstrap・live agentの不要なimportを拒否します。実際に解決したホストとプラグインのmoduleパスを表示し、指定先と一致することをassertします。
+
+`test_default_policy.py` はロード時の `enabled_by_default`（未設定はtrue、明示false、不正値）、会話内 `on/off/default`、子終了・親stop・圧縮・reset・finalize・別会話の境界を確認します。既定オフ中の子登録、途中onでの既存対象の監督、defaultでのオフ復帰とCLI受付済み要求の失効を、実ホストの設定読取・コマンドcaller・hook・consumerに結合して検証します。稼働プロファイルの設定は使いません。
 
 これらは認証・モデル推論・実transportを使わないテストです。未知のホスト全体を安全に実行するsandboxではないため、先にホストと対象importの挙動を確認してください。
 

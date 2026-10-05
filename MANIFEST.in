@@ -1,4 +1,4 @@
-include LICENSE __init__.py plugin.yaml
+include LICENSE __init__.py plugin.yaml README.ja.md
 include docs/compatibility.md docs/development.md
 recursive-include scripts *.py
 recursive-include tests *.py
