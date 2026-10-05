@@ -98,9 +98,9 @@ hermes plugins enable delegate_supervisor --no-allow-tool-override
 
 ## ライセンスと由来
 
-本リポジトリには現時点で `LICENSE` がなく、`pyproject.toml` にもライセンス宣言がありません。公開は、コードの再利用・改変・再配布についてオープンソースの許諾を与えたことを意味しません。権利者によるライセンス決定が必要です。
+[MIT License](LICENSE)です。利用・改変・再配布・商用利用が可能です。コピーまたは主要部分を再配布する際は、著作権表示と許諾文を保持してください。無保証です。
 
-Hermes Agent本体はNous ResearchのMITライセンスですが、そのライセンスをこの独立プラグインへ自動適用しません。テストは別チェックアウトのホスト処理を読み取り、fixtureで実行します。Hermes本体や別のroutingプラグインを同梱する構成ではありません。
+Hermes Agent本体や第三者の依存には、それぞれのライセンスが適用されます。テストは別チェックアウトのホスト処理を読み取り、fixtureで実行します。Hermes本体や別のroutingプラグインを同梱する構成ではありません。
 
 ## 参考資料
 
