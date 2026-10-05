@@ -1,64 +1,66 @@
 # hermes-delegate-supervisor
 
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) の `delegate_task` で実行中の子エージェントを、元の親エージェントが定期的に確認するためのプラグインです。プラグイン識別子は `delegate_supervisor`、既定の確認間隔は600秒（10分）です。
+[English](README.md) | [日本語](README.ja.md)
 
-タイマーが期限を管理し、親に確認対象を渡します。親は必要に応じて進捗や証拠を調べ、既存の `delegate_task(action="steer", ...)` で追加指示します。別の監督モデルを起動する機能ではありません。タイマーと生存確認はモデルを呼びませんが、親の確認ターンには通常の推論コストが発生します。
+A plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent) that lets the original parent agent periodically review child agents running through `delegate_task`. The plugin ID is `delegate_supervisor`, and the default review interval is 600 seconds (10 minutes).
 
-このREADMEは **v0.2.0のソース**を説明します。v0.1.0には `/supervision` がありません。v0.2.0はオフライン検証済みの候補であり、実Gateway・Discord・CLI・TUI・Desktopでの配送と親の判断までを実運用確認した版ではありません。
+A timer tracks review deadlines and passes the targets to the parent. The parent can inspect progress and evidence as needed, then send further instructions through the existing `delegate_task(action="steer", ...)`. This plugin does not launch a separate supervision model. The timer and liveness checks do not call a model, but the parent's review turns incur normal inference costs.
 
-## 監督する作業・しない作業
+This README describes the **v0.2.0 source**. v0.1.0 does not have `/supervision`. v0.2.0 is an offline-verified candidate, not a release whose delivery and parent decision-making have been verified in live Gateway, Discord, CLI, TUI, or Desktop operation.
 
-対象は、プラグインのロード後にトップレベルの会話から `delegate_task` で起動した子エージェントです。同じ親に複数の確認期限が重なった場合、一つの確認にまとめます。ロード前から実行中の子は遡って登録しません。
+## What it supervises—and what it does not
 
-次の処理は既存のHermesに任せます。
+The plugin supervises child agents launched with `delegate_task` from top-level conversations after the plugin has loaded. When several review deadlines for the same parent coincide, it combines them into one review. It does not retroactively register children that were already running before it loaded.
 
-- 子の起動・実行・停止、完了通知、停滞検出。
-- 子のモデル・プロバイダー・推論設定・Fast設定の選択。
-- 親が行う判断と、実行中の子への追加指示。
+The following remain the responsibility of Hermes:
 
-一般のバックグラウンドプロセス、cron、任意の作業一覧を監視する機能ではありません。ネストした委譲の親、API server、stateless・one-shotセッション、送信先を特定できない会話は対象外です。既存の `/heartbeat` の登録・変更も行いません。Heartbeatは会話ごとの任意の反復指示、本プラグインは実行中の委譲先に対する期限管理という別の用途です。
+- Starting, running, and stopping children; completion notifications; and stall detection.
+- Selecting child models, providers, inference settings, and Fast settings.
+- The parent's decisions and further instructions to running children.
 
-## 会話内の `/supervision`
+This is not a monitor for general background processes, cron jobs, or arbitrary task lists. Parents of nested delegations, API servers, stateless or one-shot sessions, and conversations without an identifiable delivery destination are out of scope. The plugin does not register or modify the existing `/heartbeat`. Heartbeat provides arbitrary recurring instructions per conversation; this plugin instead tracks review deadlines for running delegated children.
 
-コマンドはモデルを呼ばず、その会話の設定だけを表示・変更します。別会話・別プロファイル・設定ファイルには書き込みません。
+## `/supervision` within a conversation
 
-| 入力 | 効果 |
+The command displays or changes settings for the current conversation without calling a model. It does not write to other conversations, other profiles, or configuration files.
+
+| Input | Effect |
 |---|---|
-| `/supervision` または `/supervision status` | 有効・無効、実効間隔、既定値・上書き、対象ID、親のbusy・idle、保留数、受付済み確認要求の有無を表示 |
-| `/supervision 10m` | この会話の間隔を上書きし、自動確認を有効化 |
-| `/supervision off` | 自動確認だけを無効化。直前の間隔と子の登録を保持 |
-| `/supervision default` | 間隔と無効化の上書きを解除し、ロード時の既定間隔で有効化 |
+| `/supervision` or `/supervision status` | Shows enabled/disabled state, effective interval, default/override status, target IDs, parent busy/idle state, pending count, and whether a review request has been accepted |
+| `/supervision 10m` | Overrides the interval for this conversation and enables automatic reviews |
+| `/supervision off` | Disables automatic reviews only; retains the previous interval and registered children |
+| `/supervision default` | Clears the interval and disabled-state overrides, then enables reviews using the default interval read at load time |
 
-間隔は `s`・`m`・`h` 付きの整数または小数です。`30s`、`1.5m`、`1h` を指定でき、最小は1秒です。単位なしの値や `1d` は受け付けません。短い間隔は親の確認ターンと推論コストを増やします。
+Intervals are integers or decimals followed by `s`, `m`, or `h`. Examples include `30s`, `1.5m`, and `1h`; the minimum is 1 second. Values without a unit and `1d` are not accepted. Shorter intervals increase the number of parent review turns and their inference costs.
 
-子を起動する前にも設定できます。ただしGatewayに会話のセッションがまだ存在しない場合は、先に通常のメッセージを送る必要があります。プラグインはコマンドのために新規セッションを作りません。
+You can configure supervision before launching a child. If the conversation does not yet have a session in the Gateway, however, send a normal message first. The plugin does not create a new session just to handle the command.
 
-### 間隔変更と停止の違い
+### Changing the interval versus disabling reviews
 
-間隔・`default` の変更は、子の登録、親の状態、保留中の確認、受付済み要求を保持します。各子の次の期限はコマンド受付時刻から新しい間隔で計算し直します。すでに保留・受付済みの確認は、その新期限より先に届く場合があります。設定反映のためのプラグイン再ロードは不要です。
+Changing the interval or using `default` preserves registered children, the parent's state, pending reviews, and accepted requests. Each child's next deadline is recalculated from the time the command is accepted, using the new interval. Reviews that are already pending or accepted may arrive before that new deadline. No plugin reload is needed for these changes.
 
-`off` は子を停止せず、保留中の確認を消し、ターン入口で確認対象を渡さなくします。無効化中に起動した子も登録します。再有効化すると、現在時刻から次の期限を設定します。
+`off` does not stop children. It clears pending reviews and prevents review targets from being supplied at the start of a turn. Children launched while supervision is disabled are still registered. Re-enabling supervision sets the next deadlines from the current time.
 
-Classic CLIでは未消費の確認要求を失効させます。Gateway・TUI・Desktopには受付済み入力の撤回APIがないため、無効化後に一度届く場合があります。その要求だけでは子への追加指示を促しません。ただし、すでに確認対象を受け取って開始した親ターンは取り消しません。
+In Classic CLI, unconsumed review requests are invalidated. Gateway, TUI, and Desktop have no API for retracting accepted input, so one accepted request may still arrive after supervision is disabled. That request alone does not prompt further instructions to children. However, a parent turn that has already started with review targets is not canceled.
 
-### 操作できる画面とbusy時の扱い
+### Supported interfaces and behavior while busy
 
-| 画面・経路 | `/supervision` の扱い |
+| Interface or route | Handling of `/supervision` |
 |---|---|
-| Classic CLI | ネイティブのコマンド処理を使用 |
-| TUI・Desktop | ネイティブのプラグイン呼出しを使用。busy時の制御呼出しはオフライン確認済み |
-| アイドル中のMessaging Gateway | 登録済みコマンドとして処理 |
-| busy中のMessaging Gateway | 対応するホスト・アダプターでは明示拒否。親がidleになってから操作 |
+| Classic CLI | Uses native command handling |
+| TUI and Desktop | Uses native plugin invocation; control calls while busy have been verified offline |
+| Idle Messaging Gateway | Handles it as a registered command |
+| Busy Messaging Gateway | Explicitly rejects it on supported hosts and adapters; use the command after the parent becomes idle |
 
-busy Gatewayではユーザー認可・bot受付・slash権限確認を経て拒否します。通常入力のキュー、モデルへのsteer、interruptには渡さず、設定も変更しません。
+A busy Gateway rejects the command after user authorization, bot admission, and slash-command permission checks. It does not forward the command to the normal input queue, model steering, or interrupt handling, and does not change the settings.
 
-この拒否はホスト内部の限定アダプターに依存します。未知の実装では警告付きで無効になり、ネイティブ処理がコマンド文字列を通常入力として扱う可能性があります。対応確認なしにbusy時の安全な制御を保証するものではありません。
+This rejection depends on a narrowly scoped adapter for host internals. On an unknown implementation, rejection is disabled with a warning, and native handling may treat the command text as normal input. Safe control while busy is not guaranteed without confirming compatibility.
 
-## 導入
+## Installation
 
-Pythonパッケージの宣言上の要件はPython 3.10以上です。実際の対応はHermesのAPIと内部実装に依存します。確認したホストは `v0.21.5+4775.g3ebbaf5`、ソースrevisionは `3ebbaf524344f93943169e63854cb952541563f9` です。最新版を含む他revisionへの互換性は未確認です。先に[互換性と制限](docs/compatibility.md)を確認してください。
+The Python package declares Python 3.10 or later as its requirement. Actual compatibility depends on Hermes APIs and internal implementation. The verified host is `v0.21.5+4775.g3ebbaf5`, at source revision `3ebbaf524344f93943169e63854cb952541563f9`. Compatibility with other revisions, including the latest version, has not been verified. Read [Compatibility and limitations (Japanese)](docs/compatibility.md) first.
 
-リポジトリはnative directory pluginとPython entry pointの両方を用意しています。管理ランタイムではHermesの正規プラグイン管理を使います。以下は**リポジトリ公開後**のインストール例で、確認した公開コミットの40桁SHAを `PUBLIC_COMMIT_SHA` に指定します。
+The repository supports both native directory plugins and Python entry points. In a managed runtime, use Hermes's official plugin management commands. The following is an installation example for use **after the repository has been published**. Set `PUBLIC_COMMIT_SHA` to the 40-character SHA of a reviewed public commit.
 
 ```sh
 PUBLIC_COMMIT_SHA=REPLACE_WITH_REVIEWED_40_CHARACTER_COMMIT_SHA
@@ -67,9 +69,9 @@ hermes plugins install teich0psia/hermes-delegate-supervisor \
 hermes plugins show delegate_supervisor
 ```
 
-対象プロファイルは、通常のHermesプロファイル選択または `HERMES_HOME` で明示します。`--no-enable` はインストールのみの指定です。既存の有効な版の置換は、この新規導入例とは別に状態と権限を確認してください。
+Select the target profile explicitly through the normal Hermes profile selection mechanism or `HERMES_HOME`. `--no-enable` installs the plugin without enabling it. Replacing an already enabled version requires a separate check of state and permissions; this example covers a new installation only.
 
-自動確認をTUI・Desktop・Gatewayへ送る場合、`gateway.inject` 相当の権限が必要です。ロード時の既定間隔と注入許可は次のキーで設定します。
+Sending automatic reviews to TUI, Desktop, or Gateway requires permission equivalent to `gateway.inject`. Configure the default interval read at load time and injection permission with these keys:
 
 ```sh
 hermes config set plugins.entries.delegate_supervisor.settings.interval_seconds 600
@@ -77,33 +79,33 @@ hermes config set plugins.entries.delegate_supervisor.allow_gateway_injection tr
 hermes plugins enable delegate_supervisor --no-allow-tool-override
 ```
 
-組み込みツールの置換権限は不要です。Classic CLIの限定FIFO経路はGateway注入権限を使いません。間隔の設定値は有限の正数に限り、文字列・真偽値・0・負数・NaN・無限大ではプラグインを無効化します。
+Permission to override built-in tools is not required. The narrowly scoped Classic CLI FIFO route does not use Gateway injection permission. The configured interval must be a finite positive number; strings, booleans, 0, negative numbers, NaN, and infinity cause the plugin to become inactive.
 
-`enable` はホストによって稼働Gatewayのプラグイン再ロードを要求します。サービス再起動とは別ですが、本プラグインの監督登録・会話上書きは失われます。稼働中の会話がある場合は再ロードの影響を確認してから有効化してください。設定ファイルの既定間隔はロード時に読み取るため、稼働中の変更には会話内の `/supervision` を使います。
+Depending on the host, `enable` requests a plugin reload in the running Gateway. This is distinct from a service restart, but the plugin's supervision registrations and conversation overrides are lost. If conversations are active, check the effects of a reload before enabling the plugin. The default interval in the configuration file is read at load time; use `/supervision` within the conversation to change the interval while it is running.
 
-## 確認要求の配送と会話の寿命
+## Review request delivery and conversation lifecycle
 
-- 子ごとに単調増加時計で期限を管理します。親がbusyなら確認を保留し、次の自然なターン入口で対象を渡すか、idleになってから確認ターンを予約します。監督のために実行中の親ターンを中断しません。
-- 予約には固有トークンを付け、その要求が入口に届くまで追加予約を抑止します。受付成功はモデル実行や返信成功の証明ではありません。無関係なユーザーターンを到着確認には使いません。
-- Classic CLIは消費時に会話世代と予約の有効性を再確認し、失効した自プラグインの要求だけを捨てます。通常入力のFIFO順序は維持します。Gatewayでは非同期セッション解決後と実行入口で世代を確認します。
-- 子の完了・停止、親のstop・reset・finalize、プラグインのunloadで監督対象を解除します。親のstopは会話設定を保持し、reset・finalizeは設定も解除します。最後の子が終了しても会話の上書きは保持します。
-- 確定した圧縮履歴から一意な継続と判断できる場合だけ、設定と監督を引き継ぎます。別セッションのresume・reset、別送信先への履歴再利用では引き継ぎません。履歴が曖昧、DBが読めない、未知の実装の場合も移行を拒否します。
-- 状態はプロセス内だけに保持します。unload・reload・restart後の監督再登録と会話上書きの復元は行いません。Hermes本体の永続化された完了配送とは独立です。
+- Each child's deadline is tracked with a monotonic clock. If the parent is busy, reviews remain pending: the plugin supplies the targets at the next naturally occurring turn boundary, or reserves a review turn once the parent becomes idle. It does not interrupt an active parent turn for supervision.
+- Each reservation has a unique token. Further reservations are suppressed until that request reaches the turn boundary. Successful acceptance is not proof that a model ran or a reply was delivered. Unrelated user turns are not treated as delivery acknowledgments.
+- At consumption time, Classic CLI rechecks the conversation generation and reservation validity, discarding only this plugin's invalidated requests. Normal input retains FIFO ordering. Gateway checks the generation after asynchronous session resolution and again at the execution boundary.
+- Supervision registrations are removed when a child completes or stops, when the parent stops, resets, or finalizes, and when the plugin unloads. A parent stop preserves conversation settings; reset and finalize clear them as well. Conversation overrides remain even after the last child finishes.
+- Settings and supervision carry over only when committed compression history establishes an unambiguous continuation. They do not carry over to a resume or reset into another session, or when history is reused for a different delivery destination. Migration is also refused when history is ambiguous, the database cannot be read, or the implementation is unknown.
+- State is held only in memory within the process. Supervision registrations and conversation overrides are not restored after unload, reload, or restart. This state is independent of Hermes's persisted completion delivery.
 
-## 開発・検証
+## Development and verification
 
-ソースと展開wheelについて、既存のオフライン受入記録では各99件のテスト成功を確認しています。これは実ホストの処理をfixtureへ結合した検証であり、実LLMの子起動、認証、Discord配送、各画面の実起動までの成功を示しません。公開準備での検証は文書・パッケージ・変更した開発スクリプトに限定し、変更のない機能テスト一式は再実行していません。
+Existing offline acceptance records show 99 passing tests each for the source and the unpacked wheel. These checks connect actual host logic to fixtures; they do not establish successful child launches with a real LLM, authentication, Discord delivery, or live startup of each interface. Publication-preparation checks were limited to documentation, packaging, and modified development scripts; the unchanged functional test suite was not rerun.
 
-環境を変更せずに検証する手順と外部チェックアウト要件は[開発手順](docs/development.md)を参照してください。登録時の `ACTIVE` ログやDoctor成功だけでは、長時間動くGatewayがその版を採用したことや、定期確認の実配送は確認できません。
+See [Development instructions (Japanese)](docs/development.md) for verification procedures that do not alter the environment and for the required external checkouts. An `ACTIVE` log at registration time or a successful Doctor check alone does not establish that a long-running Gateway has adopted that version, or that periodic reviews are actually being delivered.
 
-## ライセンスと由来
+## License and provenance
 
-[MIT License](LICENSE)です。利用・改変・再配布・商用利用が可能です。コピーまたは主要部分を再配布する際は、著作権表示と許諾文を保持してください。無保証です。
+This project uses the [MIT License](LICENSE). Use, modification, redistribution, and commercial use are permitted. When redistributing copies or substantial portions, retain the copyright notice and permission notice. The software is provided without warranty.
 
-Hermes Agent本体や第三者の依存には、それぞれのライセンスが適用されます。テストは別チェックアウトのホスト処理を読み取り、fixtureで実行します。Hermes本体や別のroutingプラグインを同梱する構成ではありません。
+Hermes Agent itself and third-party dependencies remain subject to their respective licenses. Tests read host logic from a separate checkout and run it with fixtures. This project does not bundle Hermes itself or a separate routing plugin.
 
-## 参考資料
+## References
 
-- [Hermes Plugin開発ガイド](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/)
-- [Delegation・実行中の子への追加指示](https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation/)
+- [Hermes plugin development guide](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/)
+- [Delegation and steering running children](https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation/)
 - [Session Heartbeat](https://hermes-agent.nousresearch.com/docs/user-guide/features/heartbeat/)
